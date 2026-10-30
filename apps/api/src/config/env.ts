@@ -5,6 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  APP_URL: z.string().url().optional(),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   LOG_LEVEL: z.enum(['fatal','error','warn','info','debug','trace','silent']).default('info'),
@@ -12,8 +13,21 @@ const envSchema = z.object({
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   COOKIE_DOMAIN: z.string().optional(),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(3).optional(),
+}).superRefine((value, context) => {
+  if (value.NODE_ENV !== 'production') return;
+  for (const key of ['APP_URL', 'RESEND_API_KEY', 'EMAIL_FROM'] as const) {
+    if (!value[key]) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} is required in production`,
+      });
+    }
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) throw new Error(`Invalid environment configuration: ${parsed.error.message}`);
-export const env = parsed.data;
+export const env = { ...parsed.data, APP_URL: parsed.data.APP_URL ?? 'http://localhost:5173' };

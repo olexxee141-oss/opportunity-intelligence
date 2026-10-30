@@ -23,6 +23,11 @@ enum UserStatus {
   DISABLED
 }
 
+enum EmailTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 model User {
   id              String            @id @default(uuid()) @db.Uuid
   email           String            @unique
@@ -34,6 +39,7 @@ model User {
   updatedAt       DateTime          @updatedAt
   memberships     WorkspaceMember[]
   refreshSessions RefreshSession[]
+  emailTokens     EmailToken[]
 
   @@index([createdAt])
 }
@@ -51,6 +57,20 @@ model RefreshSession {
 
   @@index([userId, revokedAt])
   @@index([familyId, revokedAt])
+  @@index([expiresAt])
+}
+
+model EmailToken {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  type      EmailTokenType
+  tokenHash String         @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime       @default(now())
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, consumedAt])
   @@index([expiresAt])
 }
 

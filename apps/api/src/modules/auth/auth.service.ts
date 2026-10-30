@@ -2,6 +2,8 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import argon2 from 'argon2';
 import { SignJWT, jwtVerify } from 'jose';
 import { env } from '../../config/env.js';
+import { logger } from '../../lib/logger.js';
+import { emailService } from '../../services/email.service.js';
 import { authDb } from './auth.db.js';
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
@@ -10,21 +12,34 @@ const appError = (message: string, statusCode: number, code: string) =>
   Object.assign(new Error(message), { statusCode, code });
 
 function hashToken(token: string): string { return createHash('sha256').update(token).digest('hex'); }
-function createRefreshToken(): string { return randomBytes(48).toString('base64url'); }
+function createOpaqueToken(): string { return randomBytes(32).toString('base64url'); }
 
 async function createAccessToken(user: { id: string; email: string }, workspaceId?: string) {
-  return new SignJWT({ email: user.email, ...(workspaceId ? { workspaceId } : {}) })
+  return new SignJWT({ email: user.email, emailVerified: true, ...(workspaceId ? { workspaceId } : {}) })
     .setProtectedHeader({ alg: 'HS256' }).setSubject(user.id).setIssuedAt()
     .setExpirationTime(Math.floor(Date.now() / 1000) + env.ACCESS_TOKEN_TTL_SECONDS).sign(accessSecret);
 }
 
 async function issueSession(user: { id: string; email: string }, workspaceId?: string) {
-  const refreshToken = createRefreshToken();
+  const refreshToken = createOpaqueToken();
   await authDb.createRefreshSession({
     userId: user.id, familyId: randomUUID(), tokenHash: hashToken(refreshToken),
     expiresAt: new Date(Date.now() + refreshTtlMs),
   });
   return { accessToken: await createAccessToken(user, workspaceId), refreshToken, expiresIn: env.ACCESS_TOKEN_TTL_SECONDS };
+}
+
+async function sendVerification(user: { id: string; email: string; displayName: string | null }) {
+  const token = createOpaqueToken();
+  await authDb.createEmailToken({
+    userId: user.id, type: 'EMAIL_VERIFICATION', tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+  });
+  try {
+    await emailService.sendVerificationEmail({ to: user.email, displayName: user.displayName ?? 'there', token });
+  } catch (error) {
+    logger.error({ err: error, userId: user.id }, 'Unable to send verification email through Resend');
+  }
 }
 
 export const authService = {
@@ -35,18 +50,50 @@ export const authService = {
     const { user, workspace } = await authDb.createUserWithWorkspace({
       ...input, passwordHash, workspaceSlug: `${slugBase}-${randomBytes(4).toString('hex')}`,
     });
-    const session = await issueSession(user, workspace.id);
+    await sendVerification(user);
     return {
       user: { id: user.id, email: user.email, displayName: user.displayName },
       workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug, role: 'OWNER' as const },
-      session,
+      verificationRequired: true,
     };
+  },
+
+  async resendVerification(email: string) {
+    const user = await authDb.findUserByEmail(email);
+    if (user && !user.emailVerifiedAt && user.status === 'ACTIVE') await sendVerification(user);
+  },
+
+  async verifyEmail(token: string) {
+    const userId = await authDb.consumeVerificationToken(hashToken(token));
+    if (!userId) throw appError('Verification link is invalid or expired', 400, 'INVALID_VERIFICATION_TOKEN');
+  },
+
+  async requestPasswordReset(email: string) {
+    const user = await authDb.findUserByEmail(email);
+    if (!user || user.status !== 'ACTIVE' || !user.emailVerifiedAt) return;
+    const token = createOpaqueToken();
+    await authDb.createEmailToken({
+      userId: user.id, type: 'PASSWORD_RESET', tokenHash: hashToken(token),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    try {
+      await emailService.sendPasswordResetEmail({ to: user.email, displayName: user.displayName ?? 'there', token });
+    } catch (error) {
+      logger.error({ err: error, userId: user.id }, 'Unable to send password reset email through Resend');
+    }
+  },
+
+  async resetPassword(token: string, password: string) {
+    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    const reset = await authDb.resetPasswordWithToken(hashToken(token), passwordHash);
+    if (!reset) throw appError('Password reset link is invalid or expired', 400, 'INVALID_PASSWORD_RESET_TOKEN');
   },
 
   async login(input: { email: string; password: string }) {
     const user = await authDb.findUserByEmail(input.email);
     const valid = user ? await argon2.verify(user.passwordHash, input.password).catch(() => false) : false;
     if (!user || !valid || user.status !== 'ACTIVE') throw appError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
+    if (!user.emailVerifiedAt) throw appError('Verify your email address before signing in', 403, 'EMAIL_NOT_VERIFIED');
     const memberships = await authDb.listUserWorkspaces(user.id);
     const session = await issueSession(user, memberships[0]?.workspace.id);
     return {
@@ -59,11 +106,11 @@ export const authService = {
   async refresh(token: string) {
     const existing = await authDb.findRefreshSession(hashToken(token));
     if (!existing) throw appError('Refresh session is invalid or expired', 401, 'INVALID_REFRESH_TOKEN');
-    if (existing.revokedAt || existing.expiresAt <= new Date() || existing.user.status !== 'ACTIVE') {
+    if (existing.revokedAt || existing.expiresAt <= new Date() || existing.user.status !== 'ACTIVE' || !existing.user.emailVerifiedAt) {
       if (existing.revokedAt) await authDb.revokeRefreshFamily(existing.familyId);
       throw appError('Refresh session is invalid or expired', 401, 'INVALID_REFRESH_TOKEN');
     }
-    const nextToken = createRefreshToken();
+    const nextToken = createOpaqueToken();
     const rotated = await authDb.rotateRefreshSession(existing.id, {
       userId: existing.userId, familyId: existing.familyId, tokenHash: hashToken(nextToken),
       expiresAt: new Date(Date.now() + refreshTtlMs),
@@ -90,7 +137,7 @@ export const authService = {
     try {
       const { payload } = await jwtVerify(token, accessSecret, { algorithms: ['HS256'] });
       if (!payload.sub || typeof payload.email !== 'string') throw new Error('Invalid token claims');
-      return { id: payload.sub, email: payload.email };
+      return { id: payload.sub, email: payload.email, emailVerified: payload.emailVerified === true };
     } catch { throw appError('Access token is invalid or expired', 401, 'INVALID_ACCESS_TOKEN'); }
   },
 

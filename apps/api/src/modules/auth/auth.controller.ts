@@ -22,8 +22,32 @@ export const authController = {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await authService.register(req.body);
-      setRefreshCookie(res, result.session.refreshToken);
-      res.status(201).json({ user: result.user, workspace: result.workspace, accessToken: result.session.accessToken, expiresIn: result.session.expiresIn });
+      res.status(201).json({ ...result, message: 'Account created. Check your inbox for a verification link.' });
+    } catch (error) { next(error); }
+  },
+  async resendVerification(req: Request, res: Response, next: NextFunction) {
+    try {
+      await authService.resendVerification(req.body.email);
+      res.status(202).json({ message: 'If the account exists and needs verification, an email will be sent shortly.' });
+    } catch (error) { next(error); }
+  },
+  async verifyEmail(req: Request, res: Response, next: NextFunction) {
+    try {
+      await authService.verifyEmail(req.body.token);
+      res.status(200).json({ message: 'Email address verified. You can now sign in.' });
+    } catch (error) { next(error); }
+  },
+  async requestPasswordReset(req: Request, res: Response, next: NextFunction) {
+    try {
+      await authService.requestPasswordReset(req.body.email);
+      res.status(202).json({ message: 'If an eligible account exists, password reset instructions will be sent shortly.' });
+    } catch (error) { next(error); }
+  },
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      await authService.resetPassword(req.body.token, req.body.password);
+      clearRefreshCookie(res);
+      res.status(200).json({ message: 'Password updated. Sign in using your new password.' });
     } catch (error) { next(error); }
   },
   async login(req: Request, res: Response, next: NextFunction) {
