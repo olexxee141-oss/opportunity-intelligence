@@ -12,7 +12,6 @@ discoveryRoutes.get('/runs', (req: Request, res: Response, next: NextFunction) =
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid discovery query', details: parsed.error.flatten() } });
     return;
   }
-  req.query = parsed.data as typeof req.query;
   next();
 }, discoveryController.listRuns);
 discoveryRoutes.get('/candidates', (req: Request, res: Response, next: NextFunction) => {
@@ -21,7 +20,6 @@ discoveryRoutes.get('/candidates', (req: Request, res: Response, next: NextFunct
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid candidate query', details: parsed.error.flatten() } });
     return;
   }
-  req.query = parsed.data as typeof req.query;
   next();
 }, discoveryController.listCandidates);
 discoveryRoutes.post(
