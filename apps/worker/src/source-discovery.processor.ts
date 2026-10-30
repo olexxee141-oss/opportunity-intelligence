@@ -96,7 +96,7 @@ async function discover(job: Job<DiscoveryJob>) {
     if (robotsResponse.statusCode !== 200 && robotsResponse.statusCode !== 404 && robotsResponse.statusCode !== 410) {
       throw new Error('Unable to verify robots.txt policy; discovery is stopped');
     }
-    const robotsLines = robotsResponse.statusCode === 200 ? robotsResponse.body.split(/\\r?\\n/) : [];
+    const robotsLines = robotsResponse.statusCode === 200 ? robotsResponse.body.split(/\r?\n/) : [];
     const disallowed: string[] = [];
     const sitemapHints: string[] = [];
     let applies = false;
@@ -122,7 +122,8 @@ async function discover(job: Job<DiscoveryJob>) {
       const locations = extractLocs(response.body);
       if (/<sitemapindex\b/i.test(response.body)) {
         for (const nested of locations.slice(0, 10)) {
-          if (!isAllowed(nested)) continue;\n          const nestedResponse = await fetchSourceUrl(nested);
+          if (!isAllowed(nested)) continue;
+          const nestedResponse = await fetchSourceUrl(nested);
           if (nestedResponse.statusCode === 200) {
             for (const url of extractLocs(nestedResponse.body)) found.push({ url, from: nested, method: 'SITEMAP' });
           }
