@@ -360,3 +360,59 @@ model ResumeProfileProposal {
 
   @@index([workspaceId, analysisId, status])
 }
+
+
+enum OpportunitySourceType {
+  JOB_BOARD
+  COMPANY_CAREERS
+  AGGREGATOR
+  GOVERNMENT
+  OTHER
+}
+
+enum SourceOpportunityType {
+  JOB
+  INTERNSHIP
+  SCHOLARSHIP
+  GRANT
+  FREELANCE
+  OTHER
+}
+
+enum SourceStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum SourceCrawlMethod {
+  AUTO
+  HTTP
+  BROWSER
+}
+
+model Source {
+  id                    String                @id @default(uuid()) @db.Uuid
+  workspaceId           String                @db.Uuid
+  name                  String
+  baseUrl               String                @db.VarChar(2048)
+  canonicalUrl          String                @db.VarChar(2048)
+  sourceType            OpportunitySourceType
+  opportunityType       SourceOpportunityType @default(JOB)
+  status                SourceStatus          @default(ACTIVE)
+  crawlMethod           SourceCrawlMethod     @default(AUTO)
+  crawlIntervalMinutes  Int                   @default(360)
+  maxPagesPerRun        Int                   @default(20)
+  requestsPerMinute     Int                   @default(6)
+  notes                 String?               @db.Text
+  lastCrawledAt         DateTime?
+  lastCrawlStatus       String?
+  lastCrawlError        String?               @db.Text
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  workspace             Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, canonicalUrl])
+  @@index([workspaceId, status, updatedAt])
+  @@index([status, updatedAt])
+}
