@@ -121,16 +121,29 @@ async function discover(job: Job<DiscoveryJob>) {
       }
     }
 
-    const rootResponse = isAllowed(source.baseUrl) ? await fetchSourceUrl(source.baseUrl) : { statusCode: 0, body: '' };
-    if (rootResponse.statusCode === 200) {
-      const { feeds, links } = extractHtmlLinks(rootResponse.body, source.baseUrl);
-      for (const link of links) found.push({ url: link, from: source.baseUrl, method: 'HTML_LINK' });
-      for (const feedUrl of feeds.slice(0, 10)) {
-        if (!isAllowed(feedUrl)) continue;\n        const feedResponse = await fetchSourceUrl(feedUrl);
-        if (feedResponse.statusCode !== 200) continue;
-        const atom = /<feed\b/i.test(feedResponse.body);
-        for (const url of extractFeedLinks(feedResponse.body, atom)) {
-          found.push({ url, from: feedUrl, method: atom ? 'ATOM' : 'RSS' });
+    if (source.channel === 'FEED') {
+      if (isAllowed(source.baseUrl)) {
+        const feedResponse = await fetchSourceUrl(source.baseUrl);
+        if (feedResponse.statusCode === 200) {
+          const atom = /<feed\\b/i.test(feedResponse.body);
+          for (const entryUrl of extractFeedLinks(feedResponse.body, atom)) {
+            found.push({ url: new URL(entryUrl, source.baseUrl).toString(), from: source.baseUrl, method: atom ? 'ATOM' : 'RSS' });
+          }
+        }
+      }
+    } else {
+      const rootResponse = isAllowed(source.baseUrl) ? await fetchSourceUrl(source.baseUrl) : { statusCode: 0, body: '' };
+      if (rootResponse.statusCode === 200) {
+        const { feeds, links } = extractHtmlLinks(rootResponse.body, source.baseUrl);
+        for (const link of links) found.push({ url: link, from: source.baseUrl, method: 'HTML_LINK' });
+        for (const feedUrl of feeds.slice(0, 10)) {
+          if (!isAllowed(feedUrl)) continue;
+          const feedResponse = await fetchSourceUrl(feedUrl);
+          if (feedResponse.statusCode !== 200) continue;
+          const atom = /<feed\\b/i.test(feedResponse.body);
+          for (const entryUrl of extractFeedLinks(feedResponse.body, atom)) {
+            found.push({ url: new URL(entryUrl, feedUrl).toString(), from: feedUrl, method: atom ? 'ATOM' : 'RSS' });
+          }
         }
       }
     }
