@@ -50,6 +50,30 @@ Email is sent through Resend. Configure `RESEND_API_KEY`, `EMAIL_FROM`, and `APP
 
 For workspace-scoped routes, use `requireAuth` followed by `requireWorkspace`. The latter requires an `X-Workspace-Id` header and checks membership against the database on every request. Do not accept a workspace ID from the request body as proof of authorization.
 
+## Opportunity discovery implementation pipeline
+
+The opportunity discovery engine is the core ingestion system. Implement the stages in this order; do not skip ahead to recommendations before reliable ingestion and persistence exist.
+
+1. **Source registry** — register and manage the websites and feeds that may be crawled. Store source type, opportunity category, canonical base URL, crawl method preference, enabled/paused state, and conservative crawl limits. Sources are workspace-scoped in the initial implementation; a shared platform-wide source catalog can be introduced later without changing the crawler contract.
+2. **Source discovery and scheduling** — discover candidate source URLs, validate them, and schedule crawl jobs with per-domain concurrency, backoff, and crawl intervals.
+3. **Web crawling** — fetch pages using HTTP first and use Playwright only when rendering is required. Enforce robots directives, source terms, request budgets, timeouts, and redirect/network protections.
+4. **Content extraction** — extract opportunity records from HTML, structured data, and supported feeds using source-specific, versioned extraction configurations.
+5. **Normalization** — map extracted records into a canonical opportunity shape; validate required fields and preserve source provenance.
+6. **Deduplication** — identify duplicates using canonical URLs and stable content fingerprints, with safe update rules when a listing changes.
+7. **Opportunity persistence and search** — store normalized opportunities separately from raw crawl captures; support filtering, pagination, and freshness tracking.
+8. **AI enrichment** — classify opportunity type, extract requirements and skills, summarize descriptions, and record provider/model/version metadata. Treat page content as untrusted input.
+9. **Recommendations and notifications** — match enriched opportunities against workspace members' career profiles and preferences; deliver explainable recommendations and user-controlled alerts.
+
+### Pipeline boundaries
+
+- Keep source configuration, crawl execution, raw captures, normalized opportunities, enrichment, and recommendations as separate responsibilities.
+- Raw HTML/text must not be overwritten by normalized or AI-generated content.
+- Crawling and extraction must be deterministic where possible; AI enrichment is a downstream, auditable step.
+- AI may propose extraction or scheduling improvements, but production source settings require validation and controlled approval.
+- Never bypass authentication, CAPTCHAs, paywalls, robots directives, or technical access restrictions. Do not crawl private or internal network addresses. Re-check DNS resolution and every redirect at fetch time to mitigate SSRF and DNS-rebinding risks.
+- Use HTTP-first fetching; browser automation is a fallback, not the default.
+- Record crawl attempts, outcomes, timestamps, and errors so source health can be monitored.
+
 ## Engineering constraints
 
 - Tenant-owned records must always be queried through a workspace-scoped service boundary.
