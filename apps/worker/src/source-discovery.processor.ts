@@ -3,6 +3,7 @@ import { Redis } from 'ioredis';
 import { prisma } from '@oi/database';
 import { safeGet } from './safe-http.js';
 import { setTimeout as delay } from 'node:timers/promises';
+import { randomUUID } from 'node:crypto';
 
 const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
 const discoveryQueue = new Queue('source-discovery', { connection });
@@ -54,6 +55,31 @@ function isAllowedByRobots(url: string, disallowed: string[]): boolean {
   return !disallowed.some((rule) => rule !== '/' && path.startsWith(rule)) && !disallowed.includes('/');
 }
 
+async function fetchDomainLimited(url: string) {
+  const target = new URL(url);
+  const domainKey = target.host.toLowerCase();
+  const lockKey = 'oi:discovery:domain-lock:' + domainKey;
+  const lastRequestKey = 'oi:discovery:domain-last:' + domainKey;
+  const token = randomUUID();
+  while (await connection.set(lockKey, token, 'PX', 75_000, 'NX') !== 'OK') {
+    await delay(250);
+  }
+  try {
+    const lastRequestAt = Number(await connection.get(lastRequestKey) ?? 0);
+    const waitMs = Math.max(0, lastRequestAt + 1000 - Date.now());
+    if (waitMs > 0) await delay(waitMs);
+    await connection.set(lastRequestKey, String(Date.now()), 'PX', 120_000);
+    return await safeGet(url);
+  } finally {
+    await connection.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+      1,
+      lockKey,
+      token,
+    );
+  }
+}
+
 async function discover(job: Job<DiscoveryJob>) {
   const { runId, sourceId, workspaceId } = job.data;
   const source = await prisma.source.findFirst({ where: { id: sourceId, workspaceId } });
@@ -76,7 +102,7 @@ async function discover(job: Job<DiscoveryJob>) {
         where: { id: sourceId },
         data: { discoveryLeaseExpiresAt: new Date(Date.now() + 10 * 60_000) },
       });
-      return safeGet(url);
+      return fetchDomainLimited(url);
     };
     const base = new URL(source.baseUrl);
     const robotsUrl = new URL('/robots.txt', base.origin).toString();
