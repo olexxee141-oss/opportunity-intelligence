@@ -28,7 +28,8 @@ function isPublicAddress(address: string): boolean {
   return false;
 }
 
-async function resolvePublicHost(hostname: string): Promise<{ address: string; family: number }> {
+async function resolvePublicHost(inputHostname: string): Promise<{ address: string; family: number }> {
+  const hostname = inputHostname.replace(/^\[|\]$/g, '');
   if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) {
     throw new Error('Private hostnames are not crawlable');
   }
@@ -46,15 +47,16 @@ async function resolvePublicHost(hostname: string): Promise<{ address: string; f
 function requestOnce(url: URL, resolved: { address: string; family: number }, timeoutMs: number, maxBytes: number): Promise<SafeResponse> {
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? httpsRequest : httpRequest;
+    const hostname = url.hostname.replace(/^\[|\]$/g, '');
     const request = transport({
       protocol: url.protocol,
-      hostname: url.hostname,
+      hostname,
       port: url.port || undefined,
       path: url.pathname + url.search,
       method: 'GET',
       headers: { 'user-agent': 'OpportunityIntelligenceBot/1.0 (+source discovery)', accept: 'text/html,application/xml,application/rss+xml,application/atom+xml;q=0.9,*/*;q=0.1' },
       lookup: (_hostname, _options, callback) => callback(null, resolved.address, resolved.family),
-      servername: url.hostname,
+      servername: hostname,
       timeout: timeoutMs,
     }, (response) => {
       const chunks: Buffer[] = [];
