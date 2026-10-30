@@ -35,7 +35,7 @@ export const careerProfilesDb = {
     return prisma.careerProfile.upsert({
       where: { workspaceId_userId: { workspaceId, userId } },
       create: { workspaceId, userId, ...omitUndefined(input) },
-      update: input,
+      update: omitUndefined(input),
     });
   },
 
