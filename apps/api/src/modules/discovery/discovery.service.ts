@@ -21,15 +21,16 @@ export const discoveryService = {
     const lease = await discoveryDb.claimManualSource(workspaceId, sourceId, source.crawlIntervalMinutes);
     if (!lease) throw httpError(409, 'DISCOVERY_ALREADY_RUNNING', 'A discovery run is already queued or running for this source');
 
-    const run = await discoveryDb.createRun(workspaceId, sourceId, 'MANUAL');
+    let run;
     try {
+      run = await discoveryDb.createRun(workspaceId, sourceId, 'MANUAL');
       await discoveryQueue.add('discover-source', { runId: run.id, sourceId, workspaceId }, {
         jobId: run.id, attempts: 3, backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: 1000, removeOnFail: 2000,
       });
       return run;
     } catch (error) {
-      await discoveryDb.markRunFailed(workspaceId, run.id, 'Unable to enqueue discovery job');
+      if (run) await discoveryDb.markRunFailed(workspaceId, run.id, 'Unable to enqueue discovery job');
       await discoveryDb.releaseSourceLease(sourceId);
       throw error;
     }
