@@ -12,13 +12,13 @@ export const authDb = {
       return { user, workspace };
     });
   },
-  createRefreshSession(input: { userId: string; tokenHash: string; expiresAt: Date }) {
+  createRefreshSession(input: { userId: string; familyId: string; tokenHash: string; expiresAt: Date }) {
     return prisma.refreshSession.create({ data: input });
   },
   findRefreshSession(tokenHash: string) {
     return prisma.refreshSession.findUnique({ where: { tokenHash }, include: { user: true } });
   },
-  async rotateRefreshSession(oldId: string, input: { userId: string; tokenHash: string; expiresAt: Date }) {
+  async rotateRefreshSession(oldId: string, input: { userId: string; familyId: string; tokenHash: string; expiresAt: Date }) {
     return prisma.$transaction(async (tx) => {
       const revoked = await tx.refreshSession.updateMany({
         where: { id: oldId, revokedAt: null, expiresAt: { gt: new Date() } },
@@ -31,6 +31,9 @@ export const authDb = {
   },
   revokeRefreshSession(id: string) {
     return prisma.refreshSession.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date() } });
+  },
+  revokeRefreshFamily(familyId: string) {
+    return prisma.refreshSession.updateMany({ where: { familyId, revokedAt: null }, data: { revokedAt: new Date() } });
   },
   listUserWorkspaces(userId: string) {
     return prisma.workspaceMember.findMany({

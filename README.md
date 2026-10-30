@@ -17,13 +17,25 @@ Backend modules follow routes → validator → controller → service → db. C
 
 Requirements: Node.js 20.11+, npm 10+, Docker Desktop.
 
-1. Copy `.env.example` to `.env` and adjust credentials.
+1. Copy `.env.example` to `.env` and set a private JWT secret.
 2. Run `npm install`.
 3. Run `npm run infra:up`.
 4. Run `npm run db:generate` and `npm run db:migrate`.
-5. Start apps in separate terminals: `npm run dev:api`, `npm run dev:web`, `npm run dev:worker`.
+5. Start apps in separate terminals: `npm run dev:api`, `npm run dev:web`, and `npm run dev:worker`.
 
-The initial schema is intentionally small. Domain modules and tenant-scoped access rules will be introduced incrementally.
+## Authentication API
+
+- `POST /api/v1/auth/register` — create a user and initial owner workspace.
+- `POST /api/v1/auth/login` — verify credentials.
+- `POST /api/v1/auth/refresh` — rotate the HttpOnly refresh cookie.
+- `POST /api/v1/auth/logout` — revoke the refresh-token family.
+- `GET /api/v1/auth/me` — return the authenticated user and workspaces.
+- `POST /api/v1/auth/workspaces` — create another workspace.
+- `GET /api/v1/auth/workspaces/:workspaceId` — verify membership.
+
+Access tokens are short-lived JWTs returned in the response body. Send them as `Authorization: Bearer <token>`. Refresh tokens are random opaque values stored only as SHA-256 hashes in PostgreSQL and delivered using an HttpOnly, SameSite=Strict cookie. Refresh rotation is single-use; detected token reuse revokes the token family.
+
+For workspace-scoped routes, use `requireAuth` followed by `requireWorkspace`. The middleware requires an `X-Workspace-Id` header and checks membership against the database on every request. Do not accept a workspace ID from the request body as proof of authorization.
 
 ## Engineering constraints
 
