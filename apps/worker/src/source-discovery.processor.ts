@@ -49,27 +49,6 @@ function extractHtmlLinks(html: string, baseUrl: string): { feeds: string[]; lin
   return { feeds, links };
 }
 
-async function fetchRobotsAndSitemaps(baseUrl: string): Promise<{ robots: string[]; sitemaps: string[] }> {
-  const origin = new URL(baseUrl).origin;
-  const response = await safeGet(new URL('/robots.txt', origin).toString());
-  if (response.statusCode >= 500) throw new Error('robots.txt request failed');
-  const lines = response.statusCode === 200 ? response.body.split(/\r?\n/) : [];
-  const disallowed: string[] = [];
-  const sitemaps: string[] = [];
-  let applies = false;
-  for (const raw of lines) {
-    const line = raw.split('#')[0]?.trim() ?? '';
-    const separator = line.indexOf(':');
-    if (separator < 0) continue;
-    const key = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
-    if (key === 'user-agent') applies = value === '*' || /opportunityintelligencebot/i.test(value);
-    if (applies && key === 'disallow' && value) disallowed.push(value);
-    if (key === 'sitemap' && value) sitemaps.push(value);
-  }
-  return { robots: disallowed, sitemaps };
-}
-
 function isAllowedByRobots(url: string, disallowed: string[]): boolean {
   const path = new URL(url).pathname;
   return !disallowed.some((rule) => rule !== '/' && path.startsWith(rule)) && !disallowed.includes('/');
@@ -80,6 +59,11 @@ async function discover(job: Job<DiscoveryJob>) {
   const source = await prisma.source.findFirst({ where: { id: sourceId, workspaceId } });
   const run = await prisma.sourceDiscoveryRun.findFirst({ where: { id: runId, sourceId, workspaceId } });
   if (!source || !run) throw new Error('Discovery source or run was not found');
+  if (source.status !== 'ACTIVE') {
+    await prisma.sourceDiscoveryRun.update({ where: { id: runId }, data: { status: 'FAILED', error: 'Source is not active', completedAt: new Date() } });
+    await prisma.source.update({ where: { id: sourceId }, data: { discoveryLeaseExpiresAt: null } });
+    return;
+  }
   await prisma.sourceDiscoveryRun.update({ where: { id: runId }, data: { status: 'RUNNING', startedAt: new Date(), error: null } });
 
   try {
@@ -88,6 +72,10 @@ async function discover(job: Job<DiscoveryJob>) {
       const waitMs = Math.max(0, nextAllowedRequestAt - Date.now());
       if (waitMs > 0) await delay(waitMs);
       nextAllowedRequestAt = Date.now() + Math.ceil(60_000 / source.requestsPerMinute);
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: { discoveryLeaseExpiresAt: new Date(Date.now() + 10 * 60_000) },
+      });
       return safeGet(url);
     };
     const base = new URL(source.baseUrl);
@@ -207,7 +195,7 @@ async function scheduleDueSources() {
   const now = new Date();
   const due = await prisma.source.findMany({
     where: {
-      status: 'ACTIVE', nextDiscoveryAt: { lte: now },
+      status: 'ACTIVE', channel: { in: ['WEBSITE', 'FEED'] }, nextDiscoveryAt: { lte: now },
       OR: [{ discoveryLeaseExpiresAt: null }, { discoveryLeaseExpiresAt: { lt: now } }],
     },
     select: { id: true, workspaceId: true, crawlIntervalMinutes: true },
@@ -217,7 +205,7 @@ async function scheduleDueSources() {
   for (const source of due) {
     const lease = await prisma.source.updateMany({
       where: {
-        id: source.id, status: 'ACTIVE', nextDiscoveryAt: { lte: now },
+        id: source.id, status: 'ACTIVE', channel: { in: ['WEBSITE', 'FEED'] }, nextDiscoveryAt: { lte: now },
         OR: [{ discoveryLeaseExpiresAt: null }, { discoveryLeaseExpiresAt: { lt: now } }],
       },
       data: { discoveryLeaseExpiresAt: new Date(Date.now() + 10 * 60_000), nextDiscoveryAt: new Date(Date.now() + source.crawlIntervalMinutes * 60_000) },
