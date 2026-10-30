@@ -4,6 +4,12 @@ import type {
   ProfileInput, SkillInput,
 } from './career-profiles.types.js';
 
+type WithoutUndefined<T> = { [K in keyof T]: Exclude<T[K], undefined> };
+
+function omitUndefined<T extends object>(value: T): WithoutUndefined<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)) as WithoutUndefined<T>;
+}
+
 export const careerProfilesDb = {
   findProfile(workspaceId: string, userId: string) {
     return prisma.careerProfile.findUnique({
@@ -28,36 +34,36 @@ export const careerProfilesDb = {
   upsertProfile(workspaceId: string, userId: string, input: ProfileInput) {
     return prisma.careerProfile.upsert({
       where: { workspaceId_userId: { workspaceId, userId } },
-      create: { workspaceId, userId, ...input },
+      create: { workspaceId, userId, ...omitUndefined(input) },
       update: input,
     });
   },
 
   createExperience(workspaceId: string, careerProfileId: string, input: ExperienceInput) {
-    return prisma.careerExperience.create({ data: { workspaceId, careerProfileId, ...input } });
+    return prisma.careerExperience.create({ data: { workspaceId, careerProfileId, ...omitUndefined(input) } });
   },
   updateExperience(workspaceId: string, careerProfileId: string, id: string, input: ExperienceInput) {
-    return prisma.careerExperience.updateMany({ where: { id, workspaceId, careerProfileId }, data: input });
+    return prisma.careerExperience.updateMany({ where: { id, workspaceId, careerProfileId }, data: omitUndefined(input) });
   },
   deleteExperience(workspaceId: string, careerProfileId: string, id: string) {
     return prisma.careerExperience.deleteMany({ where: { id, workspaceId, careerProfileId } });
   },
 
   createEducation(workspaceId: string, careerProfileId: string, input: EducationInput) {
-    return prisma.careerEducation.create({ data: { workspaceId, careerProfileId, ...input } });
+    return prisma.careerEducation.create({ data: { workspaceId, careerProfileId, ...omitUndefined(input) } });
   },
   updateEducation(workspaceId: string, careerProfileId: string, id: string, input: EducationInput) {
-    return prisma.careerEducation.updateMany({ where: { id, workspaceId, careerProfileId }, data: input });
+    return prisma.careerEducation.updateMany({ where: { id, workspaceId, careerProfileId }, data: omitUndefined(input) });
   },
   deleteEducation(workspaceId: string, careerProfileId: string, id: string) {
     return prisma.careerEducation.deleteMany({ where: { id, workspaceId, careerProfileId } });
   },
 
   createCertification(workspaceId: string, careerProfileId: string, input: CertificationInput) {
-    return prisma.careerCertification.create({ data: { workspaceId, careerProfileId, ...input } });
+    return prisma.careerCertification.create({ data: { workspaceId, careerProfileId, ...omitUndefined(input) } });
   },
   updateCertification(workspaceId: string, careerProfileId: string, id: string, input: CertificationInput) {
-    return prisma.careerCertification.updateMany({ where: { id, workspaceId, careerProfileId }, data: input });
+    return prisma.careerCertification.updateMany({ where: { id, workspaceId, careerProfileId }, data: omitUndefined(input) });
   },
   deleteCertification(workspaceId: string, careerProfileId: string, id: string) {
     return prisma.careerCertification.deleteMany({ where: { id, workspaceId, careerProfileId } });
@@ -73,10 +79,10 @@ export const careerProfilesDb = {
       });
       return tx.careerProfileSkill.upsert({
         where: { careerProfileId_skillId: { careerProfileId, skillId: skill.id } },
-        update: { proficiency: input.proficiency, yearsExperience: input.yearsExperience, isPrimary: input.isPrimary },
+        update: omitUndefined({ proficiency: input.proficiency, yearsExperience: input.yearsExperience, isPrimary: input.isPrimary }),
         create: {
           workspaceId, careerProfileId, skillId: skill.id,
-          proficiency: input.proficiency, yearsExperience: input.yearsExperience, isPrimary: input.isPrimary,
+          ...omitUndefined({ proficiency: input.proficiency, yearsExperience: input.yearsExperience }), isPrimary: input.isPrimary,
         },
         include: { skill: true },
       });
@@ -89,8 +95,8 @@ export const careerProfilesDb = {
   async upsertPreferences(workspaceId: string, careerProfileId: string, input: PreferenceInput) {
     return prisma.$transaction(async (tx) => {
       const existing = await tx.careerPreference.findFirst({ where: { workspaceId, careerProfileId } });
-      if (existing) return tx.careerPreference.update({ where: { id: existing.id }, data: input });
-      return tx.careerPreference.create({ data: { workspaceId, careerProfileId, ...input } });
+      if (existing) return tx.careerPreference.update({ where: { id: existing.id }, data: omitUndefined(input) });
+      return tx.careerPreference.create({ data: { workspaceId, careerProfileId, ...omitUndefined(input) } });
     });
   },
 };
