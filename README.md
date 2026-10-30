@@ -42,6 +42,8 @@ Access tokens are short-lived JWTs returned in the response body. Send them as `
 
 New accounts cannot sign in or use authenticated routes until their email is verified. Verification links expire after 30 minutes. Password reset links expire after 60 minutes. Email tokens are single-use, stored as hashes, and previous unconsumed tokens of the same type are invalidated when a new one is issued. Password reset revokes all existing refresh sessions.
 
+Resume files are stored in a private Firebase Storage bucket. Configure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, and FIREBASE_STORAGE_BUCKET using a least-privilege service account. Never commit service-account credentials. Uploads accept PDF and DOCX files up to 10 MB, are checksum-deduplicated per workspace, and are parsed asynchronously by the worker. Downloads use five-minute signed URLs after workspace ownership checks. Extracted text is stored in PostgreSQL for subsequent CV analysis and AI-assisted tailoring.
+
 Email is sent through Resend. Configure `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_URL`; the sender address must belong to a domain verified in Resend. Email delivery failures are logged without exposing token values. The registration and recovery endpoints do not disclose whether an email address belongs to an account.
 
 For workspace-scoped routes, use `requireAuth` followed by `requireWorkspace`. The latter requires an `X-Workspace-Id` header and checks membership against the database on every request. Do not accept a workspace ID from the request body as proof of authorization.

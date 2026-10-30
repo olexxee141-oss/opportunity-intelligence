@@ -266,6 +266,7 @@ model CareerPreference {
   updatedAt             DateTime        @updatedAt
   careerProfile         CareerProfile   @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
 
+  @@unique([workspaceId, careerProfileId])
   @@index([workspaceId])
 }
 
@@ -277,7 +278,7 @@ model Resume {
   fileName          String
   mimeType          String
   fileSizeBytes     Int
-  storageProvider   String        @default("local")
+  storageProvider   String        @default("firebase")
   storageKey        String        @unique
   checksumSha256    String
   status            ResumeStatus  @default(UPLOADED)

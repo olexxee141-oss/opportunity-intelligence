@@ -1,1 +1,27 @@
-{"name":"@oi/worker","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"tsx watch src/worker.ts","build":"tsc -p tsconfig.json","start":"node dist/worker.js","typecheck":"tsc --noEmit -p tsconfig.json"},"dependencies":{"bullmq":"^5.25.0","dotenv":"^16.4.5","ioredis":"^5.4.1","pino":"^9.5.0"},"devDependencies":{"@types/node":"^22.9.0","tsx":"^4.19.2"}}
+{
+  "name": "@oi/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/worker.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "bullmq": "^5.25.0",
+    "dotenv": "^16.4.5",
+    "ioredis": "^5.4.1",
+    "pino": "^9.5.0",
+    "@oi/database": "0.1.0",
+    "@oi/storage": "0.1.0",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "@types/pdf-parse": "^1.1.4"
+  }
+}
