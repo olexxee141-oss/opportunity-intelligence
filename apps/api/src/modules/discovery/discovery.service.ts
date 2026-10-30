@@ -21,7 +21,7 @@ export const discoveryService = {
     const lease = await discoveryDb.claimManualSource(workspaceId, sourceId, source.crawlIntervalMinutes);
     if (!lease) throw httpError(409, 'DISCOVERY_ALREADY_RUNNING', 'A discovery run is already queued or running for this source');
 
-    let run;
+    let run: Awaited<ReturnType<typeof discoveryDb.createRun>> | undefined;
     try {
       run = await discoveryDb.createRun(workspaceId, sourceId, 'MANUAL');
       await discoveryQueue.add('discover-source', { runId: run.id, sourceId, workspaceId }, {
