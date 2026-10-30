@@ -2,19 +2,27 @@ import 'dotenv/config';
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import pino from 'pino';
+import { closeResumeProcessor } from './resume.processor.js';
+import { closeResumeAnalysisProcessor } from './resume-analysis.processor.js';
+
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
 export const systemQueue = new Queue('system', { connection });
 const worker = new Worker('system', async (job) => {
   logger.info({ jobId: job.id, name: job.name }, 'Received system job');
   if (job.name === 'health-check') return { processedAt: new Date().toISOString() };
-  throw new Error(`Unsupported system job: ${job.name}`);
+  throw new Error('Unsupported system job: ' + job.name);
 }, { connection });
 worker.on('completed', (job) => logger.info({ jobId: job.id }, 'Job completed'));
 worker.on('failed', (job, error) => logger.error({ jobId: job?.id, err: error }, 'Job failed'));
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Shutting down worker');
-  await worker.close(); await systemQueue.close(); await connection.quit(); process.exit(0);
+  await worker.close();
+  await systemQueue.close();
+  await closeResumeProcessor();
+  await closeResumeAnalysisProcessor();
+  await connection.quit();
+  process.exit(0);
 }
 process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));

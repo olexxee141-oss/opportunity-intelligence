@@ -15,9 +15,16 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(3).optional(),
+  FIREBASE_PROJECT_ID: z.string().min(1).optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
+  FIREBASE_STORAGE_BUCKET: z.string().min(1).optional(),
+  AI_API_KEY: z.string().min(1).optional(),
+  AI_BASE_URL: z.string().url().optional(),
+  AI_MODEL: z.string().min(1).optional(),
 }).superRefine((value, context) => {
   if (value.NODE_ENV !== 'production') return;
-  for (const key of ['APP_URL', 'RESEND_API_KEY', 'EMAIL_FROM'] as const) {
+  for (const key of ['APP_URL', 'RESEND_API_KEY', 'EMAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY', 'FIREBASE_STORAGE_BUCKET'] as const) {
     if (!value[key]) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

@@ -7,6 +7,8 @@ import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { careerProfilesRoutes } from './modules/career-profiles/career-profiles.routes.js';
+import { resumesRoutes } from './modules/resumes/resumes.routes.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -19,6 +21,8 @@ app.use(pinoHttp({ logger }));
 app.get('/api/v1', (_req, res) => res.status(200).json({ name: 'Opportunity Intelligence API', version: 'v1' }));
 app.use('/api/v1/health', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/career-profile', careerProfilesRoutes);
+app.use('/api/v1/resumes', resumesRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } }));
 const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
