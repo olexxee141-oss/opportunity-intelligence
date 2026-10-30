@@ -18,17 +18,38 @@ enum WorkspaceStatus {
   SUSPENDED
 }
 
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
 model User {
   id              String            @id @default(uuid()) @db.Uuid
   email           String            @unique
   passwordHash    String
   displayName     String?
+  status          UserStatus        @default(ACTIVE)
   emailVerifiedAt DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   memberships     WorkspaceMember[]
+  refreshSessions RefreshSession[]
 
   @@index([createdAt])
+}
+
+model RefreshSession {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 model Workspace {
