@@ -15,6 +15,9 @@ export const discoveryService = {
     const source = await discoveryDb.findSource(workspaceId, sourceId);
     if (!source) throw httpError(404, 'SOURCE_NOT_FOUND', 'Source was not found');
     if (source.status !== 'ACTIVE') throw httpError(409, 'SOURCE_NOT_ACTIVE', 'Only active sources can be discovered');
+    if (source.channel !== 'WEBSITE' && source.channel !== 'FEED') {
+      throw httpError(409, 'SOURCE_CONNECTOR_NOT_AVAILABLE', 'This source channel requires a provider connector that is not implemented yet');
+    }
     const lease = await discoveryDb.claimManualSource(workspaceId, sourceId, source.crawlIntervalMinutes);
     if (!lease) throw httpError(409, 'DISCOVERY_ALREADY_RUNNING', 'A discovery run is already queued or running for this source');
 
