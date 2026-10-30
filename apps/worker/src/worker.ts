@@ -4,6 +4,7 @@ import { Redis } from 'ioredis';
 import pino from 'pino';
 import { closeResumeProcessor } from './resume.processor.js';
 import { closeResumeAnalysisProcessor } from './resume-analysis.processor.js';
+import { closeSourceDiscoveryProcessor, startSourceDiscoveryScheduler } from './source-discovery.processor.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
@@ -21,9 +22,11 @@ async function shutdown(signal: string): Promise<void> {
   await systemQueue.close();
   await closeResumeProcessor();
   await closeResumeAnalysisProcessor();
+  await closeSourceDiscoveryProcessor();
   await connection.quit();
   process.exit(0);
 }
 process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
+await startSourceDiscoveryScheduler();
 logger.info('Worker process started');

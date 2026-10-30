@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { opportunityCategoryKeys } from '@oi/shared';
 
 const sourceType = z.enum(['JOB_BOARD', 'COMPANY_CAREERS', 'AGGREGATOR', 'GOVERNMENT', 'OTHER']);
-const opportunityType = z.enum(['JOB', 'INTERNSHIP', 'SCHOLARSHIP', 'GRANT', 'FREELANCE', 'OTHER']);
+const opportunityTypes = z.array(z.enum(opportunityCategoryKeys)).min(1).max(20).default(['JOB']);
 const crawlMethod = z.enum(['AUTO', 'HTTP', 'BROWSER']);
+const sourceChannel = z.enum(['WEBSITE', 'FEED', 'API', 'SOCIAL', 'SUBMISSION']);
 const sourceStatus = z.enum(['ACTIVE', 'PAUSED', 'ARCHIVED']);
 
 const httpUrl = z.string().trim().url().max(2048).refine((value) => {
@@ -18,7 +20,9 @@ export const createSourceSchema = z.object({
   name: z.string().trim().min(2).max(120),
   baseUrl: httpUrl,
   sourceType,
-  opportunityType: opportunityType.default('JOB'),
+  channel: sourceChannel.default('WEBSITE'),
+  providerKey: z.string().trim().min(2).max(80).regex(/^[A-Z0-9_-]+$/).optional(),
+  supportedOpportunityTypes: opportunityTypes,
   crawlMethod: crawlMethod.default('AUTO'),
   crawlIntervalMinutes: z.number().int().min(30).max(10080).default(360),
   maxPagesPerRun: z.number().int().min(1).max(500).default(20),
@@ -30,7 +34,9 @@ export const updateSourceSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   baseUrl: httpUrl.optional(),
   sourceType: sourceType.optional(),
-  opportunityType: opportunityType.optional(),
+  channel: sourceChannel.optional(),
+  providerKey: z.string().trim().min(2).max(80).regex(/^[A-Z0-9_-]+$/).nullable().optional(),
+  supportedOpportunityTypes: opportunityTypes.optional(),
   status: sourceStatus.optional(),
   crawlMethod: crawlMethod.optional(),
   crawlIntervalMinutes: z.number().int().min(30).max(10080).optional(),

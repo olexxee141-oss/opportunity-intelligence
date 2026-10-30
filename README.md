@@ -1,6 +1,6 @@
 # Opportunity Intelligence
 
-An AI-powered platform for discovering, extracting, classifying, deduplicating, and recommending opportunities.
+An AI-powered platform for discovering, extracting, classifying, deduplicating, and recommending opportunities across jobs, internships, hackathons, competitions, scholarships, grants, fellowships, conferences, research, volunteering, and other structured opportunity types.
 
 ## Architecture
 
@@ -8,8 +8,8 @@ An npm-workspaces monorepo with independently deployable applications:
 - `apps/api`: Express HTTP API.
 - `apps/web`: React application.
 - `apps/worker`: asynchronous jobs and crawling workloads.
-- `packages/database`: Prisma schema and database client.
-- `packages/shared`: shared contracts.
+- `packages/database`: Prisma schema and client.
+- `packages/shared`: shared contracts and controlled category keys.
 
 Backend modules follow routes → validator → controller → service → db. Controllers handle HTTP only, services own business rules, and db modules own persistence.
 
@@ -50,27 +50,38 @@ Email is sent through Resend. Configure `RESEND_API_KEY`, `EMAIL_FROM`, and `APP
 
 For workspace-scoped routes, use `requireAuth` followed by `requireWorkspace`. The latter requires an `X-Workspace-Id` header and checks membership against the database on every request. Do not accept a workspace ID from the request body as proof of authorization.
 
-## Opportunity discovery implementation pipeline
+## Opportunity discovery pipeline
 
-The opportunity discovery engine is the core ingestion system. Implement the stages in this order; do not skip ahead to recommendations before reliable ingestion and persistence exist.
+The platform uses one ingestion engine for multiple opportunity types. A source's supported categories are hints, not authoritative labels; classification belongs to the individual discovered listing after extraction.
 
-1. **Source registry** — register and manage the websites and feeds that may be crawled. Store source type, opportunity category, canonical base URL, crawl method preference, enabled/paused state, and conservative crawl limits. Sources are workspace-scoped in the initial implementation; a shared platform-wide source catalog can be introduced later without changing the crawler contract.
-2. **Source discovery and scheduling** — discover candidate source URLs, validate them, and schedule crawl jobs with per-domain concurrency, backoff, and crawl intervals.
-3. **Web crawling** — fetch pages using HTTP first and use Playwright only when rendering is required. Enforce robots directives, source terms, request budgets, timeouts, and redirect/network protections.
-4. **Content extraction** — extract opportunity records from HTML, structured data, and supported feeds using source-specific, versioned extraction configurations.
-5. **Normalization** — map extracted records into a canonical opportunity shape; validate required fields and preserve source provenance.
+1. **Source registry** — register websites, feeds and permitted external integrations. Sources can support multiple extensible category keys.
+2. **Source discovery and scheduling** — discover candidate URLs from permitted sitemaps, feeds and listing pages; persist provenance, deduplicate per source, and schedule work with leases and backoff.
+3. **Web crawling** — fetch candidate pages using HTTP first and use browser automation only when rendering is required. Enforce robots directives, source terms, request budgets, timeouts, and redirect/network protections.
+4. **Content extraction** — extract opportunity records from HTML, structured data, supported feeds, and source-specific versioned extraction configurations.
+5. **Normalization** — map extracted records into a universal opportunity shape and validate category-specific attributes.
 6. **Deduplication** — identify duplicates using canonical URLs and stable content fingerprints, with safe update rules when a listing changes.
 7. **Opportunity persistence and search** — store normalized opportunities separately from raw crawl captures; support filtering, pagination, and freshness tracking.
-8. **AI enrichment** — classify opportunity type, extract requirements and skills, summarize descriptions, and record provider/model/version metadata. Treat page content as untrusted input.
-9. **Recommendations and notifications** — match enriched opportunities against workspace members' career profiles and preferences; deliver explainable recommendations and user-controlled alerts.
+8. **AI enrichment** — classify each listing, extract requirements and skills, summarize descriptions, and record provider/model/version metadata. Treat page content as untrusted input.
+9. **Recommendations and notifications** — match enriched opportunities against workspace members' profiles and preferences; deliver explainable recommendations and user-controlled alerts.
 
-### Pipeline boundaries
+### Discovery data model
 
-- Keep source configuration, crawl execution, raw captures, normalized opportunities, enrichment, and recommendations as separate responsibilities.
+- `Source` stores its ingestion channel (`WEBSITE`, `FEED`, `API`, `SOCIAL`, `SUBMISSION`), optional provider key, configuration and supported category keys. API/SOCIAL connectors are registered as channels but are not yet executable in this phase.
+- `SourceDiscoveryRun` records each manual or scheduled discovery attempt and its outcome.
+- `DiscoveryCandidate` stores a deduplicated URL, its discovery method, provenance, and first/last-seen timestamps.
+- Discovery candidates are not yet verified opportunities. The later crawler/extractor stages decide whether a candidate contains an actual opportunity.
+
+### Platform integrations
+
+Social platforms are connectors, not generic websites. Use official APIs or explicitly authorized integrations, store credentials outside source records, and enforce each provider's permissions, quotas, retention and commercial-use terms. Public visibility is not blanket permission to scrape. Do not bypass login walls, CAPTCHAs, rate limits, or technical access restrictions.
+
+### Safety and operations
+
+- Keep source configuration, discovery runs, raw captures, normalized opportunities, enrichment, and recommendations separate.
 - Raw HTML/text must not be overwritten by normalized or AI-generated content.
-- Crawling and extraction must be deterministic where possible; AI enrichment is a downstream, auditable step.
 - AI may propose extraction or scheduling improvements, but production source settings require validation and controlled approval.
-- Never bypass authentication, CAPTCHAs, paywalls, robots directives, or technical access restrictions. Do not crawl private or internal network addresses. Re-check DNS resolution and every redirect at fetch time to mitigate SSRF and DNS-rebinding risks.
+- Never bypass authentication, CAPTCHAs, paywalls, robots directives, or technical access restrictions.
+- Re-check DNS resolution and every redirect at fetch time; block private, loopback, link-local, and reserved network destinations to mitigate SSRF and DNS-rebinding risks.
 - Use HTTP-first fetching; browser automation is a fallback, not the default.
 - Record crawl attempts, outcomes, timestamps, and errors so source health can be monitored.
 
@@ -79,5 +90,4 @@ The opportunity discovery engine is the core ingestion system. Implement the sta
 - Tenant-owned records must always be queried through a workspace-scoped service boundary.
 - Raw source content is retained separately from normalized opportunity records.
 - Crawlers must respect robots directives, source terms, rate limits, and access controls.
-- Never bypass CAPTCHAs, authentication, or technical access restrictions.
 - Treat crawled pages and AI-produced text as untrusted input.
