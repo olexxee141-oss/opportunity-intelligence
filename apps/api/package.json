@@ -27,7 +27,8 @@
     "bullmq": "^5.25.0",
     "ioredis": "^5.4.1",
     "multer": "^1.4.5-lts.1",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.2.0",
+    "@oi/shared": "0.1.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.7",
