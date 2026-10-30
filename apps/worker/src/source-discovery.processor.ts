@@ -125,7 +125,7 @@ async function discover(job: Job<DiscoveryJob>) {
       if (isAllowed(source.baseUrl)) {
         const feedResponse = await fetchSourceUrl(source.baseUrl);
         if (feedResponse.statusCode === 200) {
-          const atom = /<feed\\b/i.test(feedResponse.body);
+          const atom = /<feed\b/i.test(feedResponse.body);
           for (const entryUrl of extractFeedLinks(feedResponse.body, atom)) {
             found.push({ url: new URL(entryUrl, source.baseUrl).toString(), from: source.baseUrl, method: atom ? 'ATOM' : 'RSS' });
           }
@@ -140,7 +140,7 @@ async function discover(job: Job<DiscoveryJob>) {
           if (!isAllowed(feedUrl)) continue;
           const feedResponse = await fetchSourceUrl(feedUrl);
           if (feedResponse.statusCode !== 200) continue;
-          const atom = /<feed\\b/i.test(feedResponse.body);
+          const atom = /<feed\b/i.test(feedResponse.body);
           for (const entryUrl of extractFeedLinks(feedResponse.body, atom)) {
             found.push({ url: new URL(entryUrl, feedUrl).toString(), from: feedUrl, method: atom ? 'ATOM' : 'RSS' });
           }
