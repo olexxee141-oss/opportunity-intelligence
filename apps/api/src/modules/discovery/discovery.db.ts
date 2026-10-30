@@ -4,11 +4,21 @@ export const discoveryDb = {
   findSource(workspaceId: string, sourceId: string) {
     return prisma.source.findFirst({ where: { id: sourceId, workspaceId } });
   },
-  findActiveRun(sourceId: string) {
-    return prisma.sourceDiscoveryRun.findFirst({
-      where: { sourceId, status: { in: ['QUEUED', 'RUNNING'] } },
-      orderBy: { createdAt: 'desc' },
-    });
+  claimManualSource(workspaceId: string, sourceId: string, intervalMinutes: number) {
+    const now = new Date();
+    return prisma.source.updateMany({
+      where: {
+        id: sourceId, workspaceId, status: 'ACTIVE',
+        OR: [{ discoveryLeaseExpiresAt: null }, { discoveryLeaseExpiresAt: { lt: now } }],
+      },
+      data: {
+        discoveryLeaseExpiresAt: new Date(now.getTime() + 10 * 60_000),
+        nextDiscoveryAt: new Date(now.getTime() + intervalMinutes * 60_000),
+      },
+    }).then((result) => result.count > 0);
+  },
+  releaseSourceLease(sourceId: string) {
+    return prisma.source.updateMany({ where: { id: sourceId }, data: { discoveryLeaseExpiresAt: null } });
   },
   createRun(workspaceId: string, sourceId: string, trigger: 'MANUAL' | 'SCHEDULED') {
     return prisma.sourceDiscoveryRun.create({ data: { workspaceId, sourceId, trigger } });
