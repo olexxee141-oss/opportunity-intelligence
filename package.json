@@ -1,27 +1,25 @@
 {
-  "name": "opportunity-intelligence",
+  "name": "@oi/database",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "engines": {
-    "node": ">=20.11.0",
-    "npm": ">=10.2.0"
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "scripts": {
-    "dev:api": "npm run dev --workspace=@oi/api",
-    "dev:web": "npm run dev --workspace=@oi/web",
-    "dev:worker": "npm run dev --workspace=@oi/worker",
-    "build": "npm run db:generate && npm run build --workspace=@oi/database && npm run build --workspace=@oi/shared && npm run build --workspace=@oi/storage && npm run build --workspace=@oi/ai && npm run build --workspace=@oi/api && npm run build --workspace=@oi/worker && npm run build --workspace=@oi/web",
-    "typecheck": "npm run db:generate && npm run build --workspace=@oi/database && npm run typecheck --workspace=@oi/shared && npm run build --workspace=@oi/storage && npm run build --workspace=@oi/ai && npm run typecheck --workspace=@oi/api && npm run typecheck --workspace=@oi/worker && npm run typecheck --workspace=@oi/web",
-    "db:generate": "npm run db:generate --workspace=@oi/database",
-    "db:migrate": "npm run db:migrate --workspace=@oi/database",
-    "db:studio": "npm run db:studio --workspace=@oi/database",
-    "infra:up": "docker compose -f infrastructure/docker-compose.yml up -d",
-    "infra:down": "docker compose -f infrastructure/docker-compose.yml down"
-  },
+"scripts": {
+  "build": "tsc -p tsconfig.json",
+  "typecheck": "tsc --noEmit -p tsconfig.json",
+  "db:generate": "prisma generate",
+  "db:migrate": "prisma migrate dev",
+  "db:migrate:deploy": "prisma migrate deploy",
+  "db:status": "prisma migrate status",
+  "db:studio": "prisma studio"
+},
   "devDependencies": {
     "prettier": "^3.3.3",
     "typescript": "^5.6.3"
