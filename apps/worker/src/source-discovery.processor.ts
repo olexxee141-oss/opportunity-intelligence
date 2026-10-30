@@ -2,6 +2,7 @@ import { Queue, Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { prisma } from '@oi/database';
 import { safeGet } from './safe-http.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
 const discoveryQueue = new Queue('source-discovery', { connection });
@@ -82,18 +83,46 @@ async function discover(job: Job<DiscoveryJob>) {
   await prisma.sourceDiscoveryRun.update({ where: { id: runId }, data: { status: 'RUNNING', startedAt: new Date(), error: null } });
 
   try {
+    let nextAllowedRequestAt = 0;
+    const fetchSourceUrl = async (url: string) => {
+      const waitMs = Math.max(0, nextAllowedRequestAt - Date.now());
+      if (waitMs > 0) await delay(waitMs);
+      nextAllowedRequestAt = Date.now() + Math.ceil(60_000 / source.requestsPerMinute);
+      return safeGet(url);
+    };
     const base = new URL(source.baseUrl);
-    const { robots, sitemaps } = await fetchRobotsAndSitemaps(source.baseUrl);
+    const robotsUrl = new URL('/robots.txt', base.origin).toString();
+    const robotsResponse = await fetchSourceUrl(robotsUrl);
+    if (robotsResponse.statusCode !== 200 && robotsResponse.statusCode !== 404 && robotsResponse.statusCode !== 410) {
+      throw new Error('Unable to verify robots.txt policy; discovery is stopped');
+    }
+    const robotsLines = robotsResponse.statusCode === 200 ? robotsResponse.body.split(/\\r?\\n/) : [];
+    const disallowed: string[] = [];
+    const sitemapHints: string[] = [];
+    let applies = false;
+    for (const raw of robotsLines) {
+      const line = raw.split('#')[0]?.trim() ?? '';
+      const separator = line.indexOf(':');
+      if (separator < 0) continue;
+      const key = line.slice(0, separator).trim().toLowerCase();
+      const value = line.slice(separator + 1).trim();
+      if (key === 'user-agent') applies = value === '*' || /opportunityintelligencebot/i.test(value);
+      if (applies && key === 'disallow' && value) disallowed.push(value);
+      if (key === 'sitemap' && value) sitemapHints.push(value);
+    }
+    const robots = disallowed;
+    const sitemaps = sitemapHints;
+    const isAllowed = (url: string) => isAllowedByRobots(url, robots);
     const sitemapUrls = [...new Set([...sitemaps, new URL('/sitemap.xml', base.origin).toString()])].slice(0, 10);
     const found: Array<{ url: string; from: string; method: 'SITEMAP' | 'RSS' | 'ATOM' | 'HTML_LINK' }> = [];
     for (const sitemapUrl of sitemapUrls) {
       if (!isAllowedByRobots(sitemapUrl, robots)) continue;
-      const response = await safeGet(sitemapUrl);
+      const response = await fetchSourceUrl(sitemapUrl);
       if (response.statusCode !== 200) continue;
       const locations = extractLocs(response.body);
       if (/<sitemapindex\b/i.test(response.body)) {
         for (const nested of locations.slice(0, 10)) {
-          const nestedResponse = await safeGet(nested);
+          if (!isAllowed(nested)) continue;\n          const nestedResponse = await fetchSourceUrl(nested);
           if (nestedResponse.statusCode === 200) {
             for (const url of extractLocs(nestedResponse.body)) found.push({ url, from: nested, method: 'SITEMAP' });
           }
@@ -108,7 +137,7 @@ async function discover(job: Job<DiscoveryJob>) {
       const { feeds, links } = extractHtmlLinks(rootResponse.body, source.baseUrl);
       for (const link of links) found.push({ url: link, from: source.baseUrl, method: 'HTML_LINK' });
       for (const feedUrl of feeds.slice(0, 10)) {
-        const feedResponse = await safeGet(feedUrl);
+        if (!isAllowed(feedUrl)) continue;\n        const feedResponse = await fetchSourceUrl(feedUrl);
         if (feedResponse.statusCode !== 200) continue;
         const atom = /<feed\b/i.test(feedResponse.body);
         for (const url of extractFeedLinks(feedResponse.body, atom)) {
@@ -120,7 +149,7 @@ async function discover(job: Job<DiscoveryJob>) {
     const unique = new Map<string, { url: string; canonicalUrl: string; from: string; method: 'SITEMAP' | 'RSS' | 'ATOM' | 'HTML_LINK' }>();
     for (const item of found) {
       const canonicalUrl = canonicalize(item.url);
-      if (!canonicalUrl || !isAllowedByRobots(item.url, robots)) continue;
+      if (!canonicalUrl || canonicalUrl.length > 2048 || !isAllowed(item.url)) continue;
       if (unique.has(canonicalUrl)) continue;
       unique.set(canonicalUrl, { ...item, canonicalUrl });
       if (unique.size >= source.maxPagesPerRun) break;
@@ -154,13 +183,21 @@ async function discover(job: Job<DiscoveryJob>) {
     return { discoveredCount: unique.size, newCount };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Source discovery failed';
-    await prisma.sourceDiscoveryRun.update({
-      where: { id: runId }, data: { status: 'FAILED', error: message.slice(0, 2000), completedAt: new Date() },
-    }).catch(() => undefined);
-    await prisma.source.update({
-      where: { id: sourceId },
-      data: { nextDiscoveryAt: new Date(Date.now() + Math.max(30, source.crawlIntervalMinutes) * 60_000), discoveryLeaseExpiresAt: null },
-    }).catch(() => undefined);
+    const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+    if (finalAttempt) {
+      await prisma.sourceDiscoveryRun.update({
+        where: { id: runId }, data: { status: 'FAILED', error: message.slice(0, 2000), completedAt: new Date() },
+      }).catch(() => undefined);
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: { nextDiscoveryAt: new Date(Date.now() + Math.max(30, source.crawlIntervalMinutes) * 60_000), discoveryLeaseExpiresAt: null },
+      }).catch(() => undefined);
+    } else {
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: { discoveryLeaseExpiresAt: new Date(Date.now() + 10 * 60_000) },
+      }).catch(() => undefined);
+    }
     throw error;
   }
 }
@@ -188,10 +225,16 @@ async function scheduleDueSources() {
     const run = await prisma.sourceDiscoveryRun.create({
       data: { workspaceId: source.workspaceId, sourceId: source.id, trigger: 'SCHEDULED' },
     });
-    await discoveryQueue.add('discover-source', { runId: run.id, sourceId: source.id, workspaceId: source.workspaceId }, {
-      jobId: run.id, attempts: 3, backoff: { type: 'exponential', delay: 5000 },
-      removeOnComplete: 1000, removeOnFail: 2000,
-    });
+    try {
+      await discoveryQueue.add('discover-source', { runId: run.id, sourceId: source.id, workspaceId: source.workspaceId }, {
+        jobId: run.id, attempts: 3, backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: 1000, removeOnFail: 2000,
+      });
+    } catch (error) {
+      await prisma.sourceDiscoveryRun.update({ where: { id: run.id }, data: { status: 'FAILED', error: 'Unable to enqueue scheduled discovery', completedAt: new Date() } });
+      await prisma.source.update({ where: { id: source.id }, data: { discoveryLeaseExpiresAt: null } });
+      throw error;
+    }
   }
 }
 
