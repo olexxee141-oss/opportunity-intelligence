@@ -23,7 +23,7 @@ function isPublicAddress(address: string): boolean {
   }
   if (family === 6) {
     const value = address.toLowerCase();
-    return value.startsWith('2') && !value.startsWith('2001:db8:');
+    return (value.startsWith('2') || value.startsWith('3')) && !value.startsWith('2001:db8:');
   }
   return false;
 }
