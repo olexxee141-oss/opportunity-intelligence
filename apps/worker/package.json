@@ -17,7 +17,8 @@
     "@oi/database": "0.1.0",
     "@oi/storage": "0.1.0",
     "pdf-parse": "^1.1.1",
-    "mammoth": "^1.9.0"
+    "mammoth": "^1.9.0",
+    "@oi/ai": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

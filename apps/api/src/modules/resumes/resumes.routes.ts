@@ -2,6 +2,8 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import multer from 'multer';
 import { requireAuth, requireWorkspace } from '../../middleware/auth.middleware.js';
 import { resumesController } from './resumes.controller.js';
+import { resumeAnalysisController } from './resume-analysis.controller.js';
+import { analysisIdSchema, proposalIdSchema, proposalDecisionSchema } from './resume-analysis.validator.js';
 import { resumeIdSchema } from './resumes.validator.js';
 
 export const resumesRoutes = Router();
@@ -18,9 +20,25 @@ const upload = multer({
   },
 });
 function validateId(req: Request, res: Response, next: NextFunction) {
-  const parsed = resumeIdSchema.safeParse(req.params);
+  const parsed = resumeIdSchema.safeParse({ id: req.params.id });
   if (!parsed.success) { res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid resume ID' } }); return; }
   req.params.id = parsed.data.id;
+  next();
+}
+function validateAnalysisId(req: Request, res: Response, next: NextFunction) {
+  const parsed = analysisIdSchema.safeParse({ analysisId: req.params.analysisId });
+  if (!parsed.success) { res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid analysis ID' } }); return; }
+  next();
+}
+function validateProposalDecision(req: Request, res: Response, next: NextFunction) {
+  const parsed = proposalDecisionSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Decision must be ACCEPT or REJECT' } }); return; }
+  req.body = parsed.data;
+  next();
+}
+function validateProposalId(req: Request, res: Response, next: NextFunction) {
+  const parsed = proposalIdSchema.safeParse({ proposalId: req.params.proposalId });
+  if (!parsed.success) { res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid proposal ID' } }); return; }
   next();
 }
 function handleUpload(req: Request, res: Response, next: NextFunction) {
@@ -36,4 +54,8 @@ resumesRoutes.use(requireAuth, requireWorkspace);
 resumesRoutes.get('/', resumesController.list);
 resumesRoutes.post('/', handleUpload, resumesController.upload);
 resumesRoutes.get('/:id/download', validateId, resumesController.download);
+resumesRoutes.post('/:id/analyses', validateId, resumeAnalysisController.analyze);
+resumesRoutes.get('/:id/analyses', validateId, resumeAnalysisController.list);
+resumesRoutes.get('/:id/analyses/:analysisId', validateId, validateAnalysisId, resumeAnalysisController.get);
+resumesRoutes.patch('/:id/analyses/:analysisId/proposals/:proposalId', validateId, validateAnalysisId, validateProposalId, validateProposalDecision, resumeAnalysisController.reviewProposal);
 resumesRoutes.delete('/:id', validateId, resumesController.remove);

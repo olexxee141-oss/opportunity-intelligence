@@ -63,6 +63,27 @@ enum ResumeStatus {
   FAILED
 }
 
+enum ResumeAnalysisStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ResumeProposalType {
+  PROFILE_FIELD
+  EXPERIENCE
+  EDUCATION
+  CERTIFICATION
+  SKILL
+}
+
+enum ResumeProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 model User {
   id              String            @id @default(uuid()) @db.Uuid
   email           String            @unique
@@ -157,6 +178,7 @@ model CareerProfile {
   skills              CareerProfileSkill[]
   preferences         CareerPreference?
   resumes             Resume[]
+  resumeAnalyses      ResumeAnalysis[]
 
   @@unique([workspaceId, userId])
   @@unique([workspaceId, id])
@@ -289,9 +311,52 @@ model Resume {
   updatedAt         DateTime      @updatedAt
   careerProfile     CareerProfile @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
   uploadedBy        User          @relation("ResumeUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  analyses          ResumeAnalysis[]
 
   @@unique([workspaceId, checksumSha256])
   @@index([workspaceId, careerProfileId, createdAt])
   @@index([uploadedByUserId])
   @@index([status, createdAt])
+}
+
+
+model ResumeAnalysis {
+  id              String               @id @default(uuid()) @db.Uuid
+  workspaceId     String               @db.Uuid
+  careerProfileId String               @db.Uuid
+  resumeId        String               @db.Uuid
+  provider        String
+  model           String
+  status          ResumeAnalysisStatus @default(QUEUED)
+  summary         String?              @db.Text
+  extraction      Json?
+  missingInformation String[]           @default([])
+  weakAreas       Json?
+  error           String?              @db.Text
+  completedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  careerProfile   CareerProfile        @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
+  resume          Resume               @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  proposals       ResumeProfileProposal[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, resumeId, createdAt])
+  @@index([status, createdAt])
+}
+
+model ResumeProfileProposal {
+  id          String               @id @default(uuid()) @db.Uuid
+  workspaceId String               @db.Uuid
+  analysisId  String               @db.Uuid
+  type        ResumeProposalType
+  payload     Json
+  evidence    String               @db.Text
+  confidence  Decimal              @db.Decimal(3, 2)
+  status      ResumeProposalStatus @default(PENDING)
+  reviewedAt  DateTime?
+  createdAt   DateTime             @default(now())
+  analysis    ResumeAnalysis       @relation(fields: [workspaceId, analysisId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@index([workspaceId, analysisId, status])
 }
