@@ -17,6 +17,7 @@ ALTER TABLE "Source"
   ADD COLUMN "discoveryLeaseExpiresAt" TIMESTAMP(3),
   ADD COLUMN "lastDiscoveryAt" TIMESTAMP(3);
 
+DROP INDEX "Source_status_updatedAt_idx";
 CREATE INDEX "Source_status_nextDiscoveryAt_discoveryLeaseExpiresAt_idx"
   ON "Source"("status", "nextDiscoveryAt", "discoveryLeaseExpiresAt");
 
