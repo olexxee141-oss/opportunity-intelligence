@@ -4,6 +4,9 @@ UPDATE "Source" SET "supportedOpportunityTypes" = ARRAY["opportunityType"::TEXT]
 ALTER TABLE "Source" DROP COLUMN "opportunityType";
 DROP TYPE "SourceOpportunityType";
 
+CREATE TYPE "SourceChannel" AS ENUM ('WEBSITE', 'FEED', 'API', 'SOCIAL', 'SUBMISSION');
+ALTER TABLE "Source" ADD COLUMN "channel" "SourceChannel" NOT NULL DEFAULT 'WEBSITE', ADD COLUMN "providerKey" TEXT;
+
 CREATE TYPE "DiscoveryRunStatus" AS ENUM ('QUEUED', 'RUNNING', 'COMPLETED', 'PARTIAL', 'FAILED');
 CREATE TYPE "DiscoveryTrigger" AS ENUM ('MANUAL', 'SCHEDULED');
 CREATE TYPE "DiscoveryMethod" AS ENUM ('SITEMAP', 'RSS', 'ATOM', 'HTML_LINK', 'MANUAL');
