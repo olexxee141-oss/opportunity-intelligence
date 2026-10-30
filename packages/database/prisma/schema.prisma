@@ -141,6 +141,7 @@ model Workspace {
   updatedAt      DateTime          @updatedAt
   members        WorkspaceMember[]
   careerProfiles CareerProfile[]
+  sources        Source[]
 }
 
 model WorkspaceMember {
