@@ -371,6 +371,14 @@ enum OpportunitySourceType {
   OTHER
 }
 
+enum SourceChannel {
+  WEBSITE
+  FEED
+  API
+  SOCIAL
+  SUBMISSION
+}
+
 enum SourceStatus {
   ACTIVE
   PAUSED
@@ -417,6 +425,8 @@ model Source {
   baseUrl                  String                @db.VarChar(2048)
   canonicalUrl             String                @db.VarChar(2048)
   sourceType               OpportunitySourceType
+  channel                  SourceChannel          @default(WEBSITE)
+  providerKey              String?
   supportedOpportunityTypes String[]              @default(["JOB"])
   status                   SourceStatus          @default(ACTIVE)
   crawlMethod              SourceCrawlMethod     @default(AUTO)
