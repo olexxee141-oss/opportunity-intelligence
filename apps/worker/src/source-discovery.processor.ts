@@ -1,9 +1,10 @@
-import { Worker, type Job } from 'bullmq';
+import { Queue, Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { prisma } from '@oi/database';
 import { safeGet } from './safe-http.js';
 
 const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
+const discoveryQueue = new Queue('source-discovery', { connection });
 type DiscoveryJob = { runId: string; sourceId: string; workspaceId: string };
 
 function canonicalize(value: string): string | null {
