@@ -132,7 +132,7 @@ async function discover(job: Job<DiscoveryJob>) {
       }
     }
 
-    const rootResponse = await safeGet(source.baseUrl);
+    const rootResponse = isAllowed(source.baseUrl) ? await fetchSourceUrl(source.baseUrl) : { statusCode: 0, body: '' };
     if (rootResponse.statusCode === 200) {
       const { feeds, links } = extractHtmlLinks(rootResponse.body, source.baseUrl);
       for (const link of links) found.push({ url: link, from: source.baseUrl, method: 'HTML_LINK' });
