@@ -66,7 +66,7 @@ The platform uses one ingestion engine for multiple opportunity types. A source'
 
 ### Discovery data model
 
-- `Source` stores source configuration and a list of supported category keys.
+- `Source` stores its ingestion channel (`WEBSITE`, `FEED`, `API`, `SOCIAL`, `SUBMISSION`), optional provider key, configuration and supported category keys. API/SOCIAL connectors are registered as channels but are not yet executable in this phase.
 - `SourceDiscoveryRun` records each manual or scheduled discovery attempt and its outcome.
 - `DiscoveryCandidate` stores a deduplicated URL, its discovery method, provenance, and first/last-seen timestamps.
 - Discovery candidates are not yet verified opportunities. The later crawler/extractor stages decide whether a candidate contains an actual opportunity.
