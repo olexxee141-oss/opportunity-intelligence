@@ -1,2 +1,4 @@
 export const API_VERSION = 'v1';
-export type OpportunityCategory = 'JOB' | 'INTERNSHIP' | 'SCHOLARSHIP' | 'GRANT' | 'FREELANCE' | 'OTHER';
+export { defaultOpportunityCategory, isOpportunityCategoryKey, opportunityCategoryKeys } from './opportunity-categories.js';
+export type { OpportunityCategoryKey } from './opportunity-categories.js';
+export type { OpportunityCategoryKey as OpportunityCategory } from './opportunity-categories.js';
