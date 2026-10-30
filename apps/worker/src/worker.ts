@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import { Queue, Worker } from 'bullmq';
-import IORedis from 'ioredis';
+import { Redis } from 'ioredis';
 import pino from 'pino';
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
-const connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
+const connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null });
 export const systemQueue = new Queue('system', { connection });
 const worker = new Worker('system', async (job) => {
   logger.info({ jobId: job.id, name: job.name }, 'Received system job');

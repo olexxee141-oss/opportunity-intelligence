@@ -4,7 +4,7 @@ import { authService } from '../modules/auth/auth.service.js';
 declare global {
   namespace Express {
     interface Request {
-      auth?: { userId: string; email: string };
+      auth?: { userId: string; email: string; emailVerified: boolean };
       workspace?: { id: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' };
     }
   }
@@ -18,7 +18,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
     const payload = await authService.verifyAccessToken(header.slice(7));
-    req.auth = { userId: payload.id, email: payload.email };
+    if (!payload.emailVerified) {
+      res.status(403).json({ error: { code: 'EMAIL_NOT_VERIFIED', message: 'Verify your email address before continuing' } });
+      return;
+    }
+    req.auth = { userId: payload.id, email: payload.email, emailVerified: true };
     next();
   } catch {
     res.status(401).json({ error: { code: 'INVALID_ACCESS_TOKEN', message: 'Access token is invalid or expired' } });
