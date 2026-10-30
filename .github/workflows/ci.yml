@@ -9,6 +9,20 @@ on:
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opportunity_intelligence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d opportunity_intelligence"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opportunity_intelligence?schema=public
       JWT_ACCESS_SECRET: ci-only-secret-that-is-at-least-thirty-two-characters-long
@@ -18,4 +32,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npm run typecheck
+      - name: Apply all committed database migrations
+        run: npm run db:migrate:deploy
+      - name: Generate Prisma client and typecheck workspaces
+        run: npm run typecheck
