@@ -15,8 +15,8 @@ export const discoveryService = {
     const source = await discoveryDb.findSource(workspaceId, sourceId);
     if (!source) throw httpError(404, 'SOURCE_NOT_FOUND', 'Source was not found');
     if (source.status !== 'ACTIVE') throw httpError(409, 'SOURCE_NOT_ACTIVE', 'Only active sources can be discovered');
-    const activeRun = await discoveryDb.findActiveRun(sourceId);
-    if (activeRun) throw httpError(409, 'DISCOVERY_ALREADY_RUNNING', 'A discovery run is already queued or running for this source');
+    const lease = await discoveryDb.claimManualSource(workspaceId, sourceId, source.crawlIntervalMinutes);
+    if (!lease) throw httpError(409, 'DISCOVERY_ALREADY_RUNNING', 'A discovery run is already queued or running for this source');
 
     const run = await discoveryDb.createRun(workspaceId, sourceId, 'MANUAL');
     try {
@@ -27,6 +27,7 @@ export const discoveryService = {
       return run;
     } catch (error) {
       await discoveryDb.markRunFailed(workspaceId, run.id, 'Unable to enqueue discovery job');
+      await discoveryDb.releaseSourceLease(sourceId);
       throw error;
     }
   },
