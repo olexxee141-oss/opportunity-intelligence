@@ -133,15 +133,17 @@ model EmailToken {
 }
 
 model Workspace {
-  id             String            @id @default(uuid()) @db.Uuid
+  id             String               @id @default(uuid()) @db.Uuid
   name           String
-  slug           String            @unique
-  status         WorkspaceStatus   @default(ACTIVE)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  slug           String               @unique
+  status         WorkspaceStatus      @default(ACTIVE)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
   members        WorkspaceMember[]
   careerProfiles CareerProfile[]
   sources        Source[]
+  discoveryRuns  SourceDiscoveryRun[]
+  discoveryCandidates DiscoveryCandidate[]
 }
 
 model WorkspaceMember {
@@ -221,7 +223,7 @@ model CareerEducation {
   description     String?       @db.Text
   sortOrder       Int           @default(0)
   createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  updatedAt      DateTime      @updatedAt
   careerProfile   CareerProfile @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
 
   @@index([workspaceId, careerProfileId, sortOrder])
@@ -271,23 +273,23 @@ model CareerProfileSkill {
 }
 
 model CareerPreference {
-  id                    String          @id @default(uuid()) @db.Uuid
-  workspaceId           String          @db.Uuid
-  careerProfileId       String          @unique @db.Uuid
-  desiredJobTitles      String[]        @default([])
-  preferredLocations   String[]        @default([])
-  industries            String[]        @default([])
+  id                    String           @id @default(uuid()) @db.Uuid
+  workspaceId           String           @db.Uuid
+  careerProfileId       String           @unique @db.Uuid
+  desiredJobTitles      String[]         @default([])
+  preferredLocations   String[]         @default([])
+  industries            String[]         @default([])
   employmentTypes       EmploymentType[] @default([])
-  workModes             WorkMode[]      @default([])
-  minSalaryAmount       Decimal?        @db.Decimal(12, 2)
-  maxSalaryAmount       Decimal?        @db.Decimal(12, 2)
+  workModes             WorkMode[]       @default([])
+  minSalaryAmount       Decimal?         @db.Decimal(12, 2)
+  maxSalaryAmount       Decimal?         @db.Decimal(12, 2)
   salaryCurrency        String?
   salaryPeriod          SalaryPeriod?
-  willingToRelocate     Boolean         @default(false)
+  willingToRelocate     Boolean          @default(false)
   requiresSponsorship   Boolean?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  careerProfile         CareerProfile   @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  careerProfile         CareerProfile    @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
 
   @@unique([workspaceId, careerProfileId])
   @@index([workspaceId])
@@ -320,26 +322,25 @@ model Resume {
   @@index([status, createdAt])
 }
 
-
 model ResumeAnalysis {
-  id              String               @id @default(uuid()) @db.Uuid
-  workspaceId     String               @db.Uuid
-  careerProfileId String               @db.Uuid
-  resumeId        String               @db.Uuid
-  provider        String
-  model           String
-  status          ResumeAnalysisStatus @default(QUEUED)
-  summary         String?              @db.Text
-  extraction      Json?
-  missingInformation String[]           @default([])
-  weakAreas       Json?
-  error           String?              @db.Text
-  completedAt     DateTime?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  careerProfile   CareerProfile        @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
-  resume          Resume               @relation(fields: [resumeId], references: [id], onDelete: Cascade)
-  proposals       ResumeProfileProposal[]
+  id                 String               @id @default(uuid()) @db.Uuid
+  workspaceId        String               @db.Uuid
+  careerProfileId    String               @db.Uuid
+  resumeId           String               @db.Uuid
+  provider           String
+  model              String
+  status             ResumeAnalysisStatus @default(QUEUED)
+  summary            String?              @db.Text
+  extraction         Json?
+  missingInformation String[]              @default([])
+  weakAreas          Json?
+  error              String?              @db.Text
+  completedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  careerProfile      CareerProfile        @relation(fields: [workspaceId, careerProfileId], references: [workspaceId, id], onDelete: Cascade)
+  resume             Resume               @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  proposals          ResumeProfileProposal[]
 
   @@unique([workspaceId, id])
   @@index([workspaceId, resumeId, createdAt])
@@ -362,21 +363,11 @@ model ResumeProfileProposal {
   @@index([workspaceId, analysisId, status])
 }
 
-
 enum OpportunitySourceType {
   JOB_BOARD
   COMPANY_CAREERS
   AGGREGATOR
   GOVERNMENT
-  OTHER
-}
-
-enum SourceOpportunityType {
-  JOB
-  INTERNSHIP
-  SCHOLARSHIP
-  GRANT
-  FREELANCE
   OTHER
 }
 
@@ -392,28 +383,102 @@ enum SourceCrawlMethod {
   BROWSER
 }
 
+enum DiscoveryRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum DiscoveryTrigger {
+  MANUAL
+  SCHEDULED
+}
+
+enum DiscoveryMethod {
+  SITEMAP
+  RSS
+  ATOM
+  HTML_LINK
+  MANUAL
+}
+
+enum DiscoveryCandidateStatus {
+  DISCOVERED
+  QUEUED
+  REJECTED
+}
+
 model Source {
-  id                    String                @id @default(uuid()) @db.Uuid
-  workspaceId           String                @db.Uuid
-  name                  String
-  baseUrl               String                @db.VarChar(2048)
-  canonicalUrl          String                @db.VarChar(2048)
-  sourceType            OpportunitySourceType
-  opportunityType       SourceOpportunityType @default(JOB)
-  status                SourceStatus          @default(ACTIVE)
-  crawlMethod           SourceCrawlMethod     @default(AUTO)
-  crawlIntervalMinutes  Int                   @default(360)
-  maxPagesPerRun        Int                   @default(20)
-  requestsPerMinute     Int                   @default(6)
-  notes                 String?               @db.Text
-  lastCrawledAt         DateTime?
-  lastCrawlStatus       String?
-  lastCrawlError        String?               @db.Text
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  workspace             Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                       String                @id @default(uuid()) @db.Uuid
+  workspaceId              String                @db.Uuid
+  name                     String
+  baseUrl                  String                @db.VarChar(2048)
+  canonicalUrl             String                @db.VarChar(2048)
+  sourceType               OpportunitySourceType
+  supportedOpportunityTypes String[]              @default(["JOB"])
+  status                   SourceStatus          @default(ACTIVE)
+  crawlMethod              SourceCrawlMethod     @default(AUTO)
+  crawlIntervalMinutes     Int                   @default(360)
+  maxPagesPerRun           Int                   @default(20)
+  requestsPerMinute        Int                   @default(6)
+  notes                    String?               @db.Text
+  lastCrawledAt            DateTime?
+  lastCrawlStatus          String?
+  lastCrawlError           String?               @db.Text
+  nextDiscoveryAt          DateTime              @default(now())
+  discoveryLeaseExpiresAt  DateTime?
+  lastDiscoveryAt          DateTime?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  workspace                Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  discoveryRuns            SourceDiscoveryRun[]
+  discoveryCandidates      DiscoveryCandidate[]
 
   @@unique([workspaceId, canonicalUrl])
   @@index([workspaceId, status, updatedAt])
-  @@index([status, updatedAt])
+  @@index([status, nextDiscoveryAt, discoveryLeaseExpiresAt])
+}
+
+model SourceDiscoveryRun {
+  id               String             @id @default(uuid()) @db.Uuid
+  workspaceId      String             @db.Uuid
+  sourceId         String             @db.Uuid
+  status           DiscoveryRunStatus @default(QUEUED)
+  trigger          DiscoveryTrigger
+  startedAt        DateTime?
+  completedAt      DateTime?
+  discoveredCount  Int                @default(0)
+  newCount         Int                @default(0)
+  rejectedCount    Int                @default(0)
+  error            String?            @db.Text
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  workspace        Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source           Source             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([sourceId, status, createdAt])
+}
+
+model DiscoveryCandidate {
+  id                String                   @id @default(uuid()) @db.Uuid
+  workspaceId       String                   @db.Uuid
+  sourceId          String                   @db.Uuid
+  url               String                   @db.VarChar(2048)
+  canonicalUrl      String                   @db.VarChar(2048)
+  discoveredFromUrl String                   @db.VarChar(2048)
+  method            DiscoveryMethod
+  status            DiscoveryCandidateStatus  @default(DISCOVERED)
+  firstSeenAt       DateTime                 @default(now())
+  lastSeenAt        DateTime                 @default(now())
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  workspace         Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source            Source                  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, canonicalUrl])
+  @@index([workspaceId, status, lastSeenAt])
+  @@index([sourceId, lastSeenAt])
 }
